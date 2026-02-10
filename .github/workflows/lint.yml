@@ -1,0 +1,90 @@
+name: Lint
+
+on:
+  push:
+    branches: [ main, claude/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black mypy
+
+      - name: Display tool versions
+        run: |
+          python --version
+          flake8 --version
+          black --version
+          mypy --version
+
+      - name: Run flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings. GitHub editor is 127 chars wide
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics \
+            --exclude=.git,__pycache__,build,dist,.eggs,*.egg,venv,.venv
+        continue-on-error: false
+
+      - name: Check code formatting with black
+        run: |
+          black --check --diff --color .
+        continue-on-error: false
+
+      - name: Run mypy type checking
+        run: |
+          # Type checking is informational only for now
+          mypy . --ignore-missing-imports --exclude='(venv|\.venv|build|dist)' || true
+        continue-on-error: true
+
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit safety
+
+      - name: Run bandit security linter
+        run: |
+          bandit -r . -f json -o bandit-report.json || true
+          bandit -r . -ll
+        continue-on-error: true
+
+      - name: Check for known security vulnerabilities
+        run: |
+          pip install -r requirements.txt
+          safety check --json || true
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: bandit-report.json
+          retention-days: 30

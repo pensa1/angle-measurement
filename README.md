@@ -1,5 +1,12 @@
 # Angle Measurement Tool
 
+[![CI](https://github.com/pensa1/angle-measurement/workflows/CI/badge.svg)](https://github.com/pensa1/angle-measurement/actions/workflows/ci.yml)
+[![Lint](https://github.com/pensa1/angle-measurement/workflows/Lint/badge.svg)](https://github.com/pensa1/angle-measurement/actions/workflows/lint.yml)
+[![codecov](https://codecov.io/gh/pensa1/angle-measurement/branch/main/graph/badge.svg)](https://codecov.io/gh/pensa1/angle-measurement)
+[![Python Version](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 <img src="result/result.png" alt="Angle Measurement Tool Result Example" width="400"/>
 
 An interactive Python tool for measuring angles in images, video streams, and live webcam feeds. Mark three points to measure the angle formed at the center point, with support for multiple input sources and result saving.

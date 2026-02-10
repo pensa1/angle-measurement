@@ -266,31 +266,575 @@ def angle_between_lines(line1, line2):
     return np.degrees(angle)
 ```
 
-### Canny Edge Detection + Hough Transform
+---
 
-For automatic line detection:
+## Canny Edge Detection Algorithm
 
-**Canny Edge Detection**:
+### Overview
+
+Canny edge detection is a multi-stage algorithm that identifies edges (rapid intensity changes) in images while minimizing noise. It produces thin, well-localized edge maps ideal for line detection.
+
+### Why Canny for Line Detection?
+
+**Advantages**:
+1. **Thin edges**: Non-maximum suppression produces single-pixel-width edges
+2. **Noise resistant**: Gaussian blur before processing
+3. **Tunable sensitivity**: Dual threshold allows control over edge strength
+4. **Robust**: Works across different lighting conditions with parameter adjustment
+
+### The Five-Stage Process
+
+#### Stage 1: Gaussian Blur
+
+**Purpose**: Reduce image noise and minor detail.
+
+**Process**:
 ```
-1. Gaussian blur (noise reduction)
-2. Sobel gradients (edge intensity)
-3. Non-maximum suppression (thin edges)
-4. Double thresholding (strong/weak edges)
-5. Edge tracking by hysteresis
+Input: Raw BGR or grayscale image
+       (may contain camera noise, texture)
+
+Apply: Gaussian blur with kernel (typically 5×5)
+       σ (sigma) ≈ 1.4 for standard OpenCV
+
+Output: Smoothed grayscale image
+        (noise reduced, edges slightly blurred)
 ```
 
-**Hough Transform**:
+**Effect**:
 ```
-1. Convert edges to Hough space (ρ, θ parameters)
-2. Accumulator array voting
-3. Find peaks in accumulator
-4. Convert back to line coordinates
+Original:  █▓░▓█░░▓█    (noisy)
+           ████░░░██
+
+Blurred:   ███░░░██     (smooth)
+           ███░░░██
 ```
 
-**Parameter Tuning**:
-- Canny thresholds: adaptive based on image histogram
-- Hough threshold: minimum votes for line acceptance
-- Line merging: combine nearby parallel lines
+**Why it matters**: Without blur, every pixel variation becomes an edge, creating noise.
+
+#### Stage 2: Gradient Calculation (Sobel Operators)
+
+**Purpose**: Find edge intensity and direction at each pixel.
+
+**Process**:
+```
+For each pixel, compute:
+  - Gx: horizontal gradient (Sobel X kernel)
+  - Gy: vertical gradient (Sobel Y kernel)
+
+Sobel-X kernel:     Sobel-Y kernel:
+[-1  0  1]          [-1 -2 -1]
+[-2  0  2]          [ 0  0  0]
+[-1  0  1]          [ 1  2  1]
+
+Then calculate:
+  Magnitude: M = √(Gx² + Gy²)
+  Direction: θ = atan2(Gy, Gx)
+```
+
+**Result**: An edge magnitude map and direction map.
+
+```
+Bright edge (vertical):        Dark edge (horizontal):
+  Magnitude   Direction          Magnitude   Direction
+  0   50   0   0°  90°  0°       0   0   0   0°  90°  0°
+  5  255   5  90° 90° 90°        0  255   0   0°   0°  0°
+  0   50   0   0°  90°  0°       0   0   0   0°  90°  0°
+```
+
+#### Stage 3: Non-Maximum Suppression
+
+**Purpose**: Thin edges to single-pixel width.
+
+**Process**:
+```
+For each pixel with magnitude M and direction θ:
+  1. Look at two neighboring pixels in the gradient direction
+  2. If M is NOT the maximum among the three, set M = 0
+  3. Otherwise, keep M
+```
+
+**Visual example**:
+```
+Before suppression (edge is thick):
+  0  10  20  10   0
+  0  15  30  15   0
+  0  10  20  10   0
+        ↑
+      edge
+
+After suppression (edge is thin):
+  0   0   0   0   0
+  0   0  30   0   0    ← only maximum remains
+  0   0   0   0   0
+```
+
+**Result**: Edges that are ~1 pixel wide instead of blurry gradients.
+
+#### Stage 4: Double Thresholding
+
+**Purpose**: Classify edges as strong, weak, or non-edges.
+
+**Process**:
+```
+For each pixel with magnitude M:
+  if M > high_threshold:
+      → Strong edge (definitely keep)
+  elif M > low_threshold:
+      → Weak edge (keep if connected to strong edge)
+  else:
+      → Non-edge (discard)
+```
+
+**Example with low=50, high=150**:
+```
+Magnitude map:
+  10  40   200  180   20
+  25  60    80  150   15
+  30  45   120  100   10
+
+After thresholding:
+  ·   ·    ✓    ✓     ·
+  ·   ?    ?    ✓     ·
+  ·   ·    ?    ?     ·
+
+Legend:
+  ✓ = strong edge
+  ? = weak edge (to be decided)
+  · = non-edge
+```
+
+#### Stage 5: Edge Tracking by Hysteresis
+
+**Purpose**: Keep weak edges only if connected to strong edges.
+
+**Process**:
+```
+1. Start from each strong edge (✓)
+2. Follow connected weak edges (?)
+3. Keep weak edges that connect to strong ones
+4. Discard weak edges that don't connect
+```
+
+**Visual**:
+```
+Before hysteresis:
+  ·   ·    ✓    ✓     ·
+  ·   ?    ?    ✓     ·
+  ·   ·    ?    ?     ·
+
+After hysteresis:
+  ·   ·    ✓    ✓     ·
+  ·   ·    ✓    ✓     ·    (weak edges connected to strong kept)
+  ·   ·    ·    ·     ·    (isolated weak edges removed)
+
+Result: Connected, noise-free edges
+```
+
+### Parameters Explained
+
+**Low Threshold**:
+- Typical range: 30-100
+- Default: 50
+- Lower → more edges (more noise)
+- Higher → fewer edges (may miss subtle edges)
+
+**High Threshold**:
+- Typical range: 100-300
+- Default: 150
+- Recommended: 2.5-3× low threshold
+- Controls which edges are definitely kept
+
+### Example: Processing a Wire Bender Image
+
+```
+Input: Color photo of wire bender
+  ████████████  (colored background)
+  ████████████
+
+  1. Blur:
+  ────────────   (smooth the image)
+
+  2. Sobel gradients:
+  △△△△△△△△△△    (show edge intensity)
+  ▲▲▲▲▲▲▲▲▲▲
+
+  3. Non-max suppression:
+  │ │ │ │ │ │    (thin to lines)
+  │ │ │ │ │ │
+
+  4. Double thresholding:
+  │ │ │ │ │ │    (classify edges)
+  | | | | | |    (strong vs weak)
+
+  5. Hysteresis:
+  ───────────    (keep connected edges)
+  ───────────
+
+Output: Edge map (single-pixel lines)
+```
+
+---
+
+## Hough Transform for Line Detection
+
+### Overview
+
+The Hough Transform converts edge points into a voting space where lines correspond to peaks. It's robust to broken or fragmented edges because multiple edge pixels can vote for the same line.
+
+### Core Concept: Hough Space
+
+In the normal image space, a line is represented as:
+```
+y = mx + b  (slope-intercept form)
+```
+
+In Hough space, a line is represented as:
+```
+ρ = x·cos(θ) + y·sin(θ)  (normal form)
+
+where:
+  ρ = perpendicular distance from origin to line
+  θ = angle of perpendicular (0° to 180°)
+```
+
+**Why normal form?**: More computationally efficient and handles vertical lines naturally.
+
+### The Hough Transform Process
+
+#### Step 1: Initialize Accumulator
+
+Create a 2D array (accumulator) where:
+- One dimension = ρ (distance): 0 to √(width² + height²)
+- Other dimension = θ (angle): 0° to 180°
+- Each cell counts "votes" for that (ρ, θ) line
+
+```
+Example 5×5 image:
+Accumulator array (simplified):
+    θ: 0°  45°  90°  135° 180°
+ρ:  0  [0]  [0]  [0]  [0]  [0]
+    1  [0]  [0]  [0]  [0]  [0]
+    2  [0]  [0]  [0]  [0]  [0]
+    3  [0]  [0]  [0]  [0]  [0]
+    4  [0]  [0]  [0]  [0]  [0]
+```
+
+#### Step 2: Vote from Edge Points
+
+For each edge pixel (x, y):
+```
+for θ in [0°, 1°, 2°, ..., 179°]:
+    ρ = x·cos(θ) + y·sin(θ)
+    accumulator[ρ][θ] += 1
+```
+
+Each edge pixel votes for all possible lines through it (one for each angle).
+
+**Visualization**:
+```
+Image space:          Hough space:
+  *                     after voting from (x,y):
+  edge point                 ▲
+                          hits: many cells along curve
+
+Each point creates a sinusoidal curve in Hough space.
+Lines in image space = peaks in Hough space.
+```
+
+#### Step 3: Find Peaks
+
+Search the accumulator for cells with votes > threshold:
+```
+threshold = 50  # minimum votes needed
+
+for each cell in accumulator:
+    if accumulator[ρ][θ] > threshold:
+        → Detected line at (ρ, θ)
+```
+
+**Visual**:
+```
+Accumulator array:
+    θ: 0°  45°  90°  135° 180°
+ρ:  0  [2]  [1]  [70] [3]  [1]  ← peak at (ρ=0, θ=90°)
+    1  [3]  [2]  [65] [2]  [2]
+    2  [1]  [3]  [68] [4]  [1]
+    3  [2]  [2]  [62] [2]  [3]
+    4  [1]  [3]  [60] [3]  [2]
+
+If threshold = 50:
+  Detected: Line at θ=90°, ρ=0 (horizontal line through center)
+```
+
+#### Step 4: Convert Back to Image Coordinates
+
+From detected (ρ, θ), compute the line in image space:
+```
+For a vertical line (θ ≈ 90°):
+  x = ρ
+  y ranges from 0 to image_height
+
+For a horizontal line (θ ≈ 0°):
+  y = ρ
+  x ranges from 0 to image_width
+
+For diagonal lines:
+  Use parametric equations to find endpoints
+```
+
+### Probabilistic Hough Transform (HoughLinesP)
+
+The standard Hough Transform returns infinite lines. **HoughLinesP** returns **line segments** with finite endpoints, which is more practical for our use case.
+
+**Advantages**:
+- Returns actual line segment endpoints (x1, y1, x2, y2)
+- Faster computation
+- Natural line merging candidates
+- Better for detecting multiple line segments
+
+**Parameters**:
+```python
+cv2.HoughLinesP(
+    edges,                      # input: edge image
+    rho=1,                      # accumulator resolution (pixels)
+    theta=np.pi/180,            # angle resolution (radians ≈ 1°)
+    threshold=50,               # minimum votes
+    minLineLength=50,           # minimum segment length
+    maxLineGap=10               # max gap to connect segments
+)
+```
+
+**How it differs from standard Hough**:
+```
+Standard Hough:
+  Returns: infinite lines as (ρ, θ)
+  Output: Line 1: (ρ=100, θ=45°)
+          Line 2: (ρ=150, θ=90°)
+
+HoughLinesP:
+  Returns: line segments with endpoints
+  Output: Line 1: ((50, 100), (200, 250))
+          Line 2: ((100, 0), (100, 480))
+```
+
+### Example: Detecting Wire Bender Lines
+
+```
+1. Input: Edge map from Canny
+   ╔═══════════════════════╗
+   ║ │ │ │ ╱ ╱ │ │ │ │ │  ║  (black background, white edges)
+   ║ ╲ │ │╱ ╱  │ │ │ ╲│ │  ║
+   ║ │ ╲│╱  ╱   │ │ ╱ │╱ │  ║
+   ╚═══════════════════════╝
+
+2. Hough Transform voting:
+   - Each white pixel votes for lines through it
+   - Major wire sections accumulate many votes
+   - Create peaks in Hough space
+
+3. Find peaks (threshold=50):
+   - Peak 1: (ρ=X₁, θ=Y₁) → Wire segment 1
+   - Peak 2: (ρ=X₂, θ=Y₂) → Wire segment 2
+   - Peak 3: (ρ=X₃, θ=Y₃) → Wire segment 3
+
+4. Output line segments:
+   Line 1: from (x1, y1) to (x2, y2)
+   Line 2: from (x3, y3) to (x4, y4)
+   Line 3: from (x5, y5) to (x6, y6)
+```
+
+---
+
+## Line Merging Algorithm
+
+### The Problem: Fragmented Detection
+
+After Hough Transform, lines often appear as multiple fragments rather than single continuous lines:
+
+```
+Ideal detection:
+  ●──────────────●   (one continuous line)
+
+Actual detection:
+  ●────●  ●──●  ●   (fragmented into pieces)
+```
+
+**Why fragmentation happens**:
+1. **Shadows/occlusions**: Block part of the wire
+2. **Bends and joints**: Wire changes angle, appears as separate segments
+3. **Edge detection gaps**: Weak edges don't survive thresholding
+4. **Lighting variation**: Changing intensity confuses Hough Transform
+
+### Solution: Intelligent Line Merging
+
+The merging algorithm combines nearby, nearly-parallel lines into single entities.
+
+### Merge Criteria
+
+Two lines are candidates for merging if they satisfy **both**:
+
+#### Criterion 1: Angle Similarity
+
+Lines must have similar slopes/directions:
+```
+angle_diff = |θ₁ - θ₂|
+
+Merge if angle_diff < angle_threshold (typically 5-10°)
+
+Example:
+  Line 1: 45° angle
+  Line 2: 47° angle
+  Diff = 2° < 10° → MERGE
+
+  Line 3: 92° angle
+  Diff = 47° > 10° → DON'T MERGE
+```
+
+**Visual**:
+```
+Parallel lines (similar angle):
+  ╱ ╱  ✓ candidates for merging
+  ╱ ╱
+
+Perpendicular lines (different angle):
+  ╱ ║  ✗ don't merge
+  ╱ ║
+```
+
+#### Criterion 2: Spatial Proximity
+
+Lines must be close in space (perpendicular distance):
+```
+distance = perpendicular distance between line 1 and line 2
+
+Merge if distance < distance_threshold (typically 15-30 pixels)
+
+Example:
+  Line 1: y = 100
+  Line 2: y = 108
+  Distance = 8px < 15px → MERGE
+
+  Line 3: y = 150
+  Distance = 50px > 15px → DON'T MERGE
+```
+
+**Visual**:
+```
+Close parallel lines:
+  ●────●  ●────●     ✓ merge (distance ≈ 10px)
+           (gap)
+
+Far parallel lines:
+  ●────●              ✗ don't merge (distance ≈ 50px)
+              ●────●
+              (gap)
+```
+
+### Merging Process
+
+```
+Algorithm:
+  1. Sort lines by endpoint position
+  2. For each line:
+       a. Find candidate neighbors (angle + distance criteria)
+       b. If candidates exist:
+          - Merge all candidates into single line
+          - Use bounding box of all segments
+          - Compute new direction (weighted average)
+  3. Remove duplicates
+  4. Output merged lines
+```
+
+**Step-by-step example**:
+
+```
+Input: 3 fragmented line segments
+  Line 1: ((10,  100), (30, 100))  ← horizontal, y=100
+  Line 2: ((45,  105), (70, 105))  ← horizontal, y=105
+  Line 3: ((85,  200), (120, 200)) ← horizontal, y=200
+
+Step 1: Check Line 1 vs Line 2
+  Angle diff: |0° - 0°| = 0° < 10° ✓
+  Distance: |100 - 105| = 5px < 15px ✓
+  MERGE → Line 1-2: ((10, 100), (70, 105))
+
+Step 2: Check merged Line 1-2 vs Line 3
+  Angle diff: 0° < 10° ✓
+  Distance: |105 - 200| = 95px > 15px ✗
+  DON'T MERGE
+
+Output: 2 merged lines
+  Line 1: ((10, 100), (70, 105))  ← merged from segments 1 & 2
+  Line 2: ((85, 200), (120, 200)) ← unchanged
+```
+
+### Trade-offs
+
+#### Too Strict (Over-merging Prevention)
+
+**Settings**: Small angle/distance thresholds
+```
+angle_threshold = 2°
+distance_threshold = 5px
+```
+
+**Result**: Individual segments stay separate
+```
+Output lines:
+  ●──●  ●──●  ●──●  (3 separate lines)
+```
+
+**Pros**: Preserves fine detail, individual bends visible
+**Cons**: Over-fragmented, hard to measure overall angle
+
+#### Too Loose (Over-merging)
+
+**Settings**: Large angle/distance thresholds
+```
+angle_threshold = 20°
+distance_threshold = 50px
+```
+
+**Result**: Unrelated lines combine
+```
+Input:
+  │        │
+  │ wire1  │ wire2
+  │        │
+
+Output:
+  ╲        ╱
+   ╲____╱  (incorrectly merged)
+```
+
+**Pros**: Clean output
+**Cons**: Loses fine structure, combines unrelated wires
+
+#### Balanced (Recommended)
+
+**Settings**: Moderate thresholds
+```
+angle_threshold = 5-8°
+distance_threshold = 15-20px
+```
+
+**Result**: Fragments from same wire merge, separate wires stay separate
+```
+Output:
+  ●───●  ●───●  (2 merged lines, proper separation)
+```
+
+### Parameter Tuning
+
+**Increase merging** (larger thresholds) if:
+- Wires look too fragmented
+- Many short line segments appear
+- Need to detect overall wire angle
+
+**Decrease merging** (smaller thresholds) if:
+- Unrelated lines are incorrectly combined
+- Need fine bend/joint detail
+- Wires are very close together
 
 ---
 

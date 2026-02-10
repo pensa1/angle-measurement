@@ -23,19 +23,86 @@ class TestPreprocessing:
     @pytest.mark.detection
     def test_grayscale_conversion(self):
         """Test RGB to grayscale conversion."""
-        pytest.skip("Waiting for detection module implementation")
+        from detection.preprocessor import ImagePreprocessor
+
+        # Create a color test image
+        color_image = np.ones((100, 100, 3), dtype=np.uint8) * 128
+        color_image[:, :, 0] = 255  # Blue channel
+
+        preprocessor = ImagePreprocessor()
+        gray = preprocessor.to_grayscale(color_image)
+
+        # Verify output is grayscale (2D)
+        assert len(gray.shape) == 2, "Output should be 2D grayscale"
+        assert gray.shape == (100, 100), "Shape should match input dimensions"
+        assert gray.dtype == np.uint8, "Output should be uint8"
+
+        # Test with already grayscale image
+        gray_input = np.ones((50, 50), dtype=np.uint8) * 200
+        gray_output = preprocessor.to_grayscale(gray_input)
+        assert gray_output.shape == (50, 50), "Grayscale input should pass through"
+
+        # Test error handling
+        with pytest.raises(ValueError):
+            preprocessor.to_grayscale(None)
 
     @pytest.mark.unit
     @pytest.mark.detection
     def test_gaussian_blur(self):
         """Test Gaussian blur application."""
-        pytest.skip("Waiting for detection module implementation")
+        from detection.preprocessor import ImagePreprocessor, PreprocessorConfig
+
+        # Create test image
+        test_image = np.random.randint(0, 255, (100, 100), dtype=np.uint8)
+
+        config = PreprocessorConfig(blur_kernel_size=(5, 5), blur_sigma=0)
+        preprocessor = ImagePreprocessor(config)
+
+        blurred = preprocessor.apply_gaussian_blur(test_image)
+
+        # Verify output properties
+        assert blurred.shape == test_image.shape, "Shape should be preserved"
+        assert blurred.dtype == np.uint8, "Dtype should be preserved"
+
+        # Blurred image should have lower variance (smoother)
+        assert np.var(blurred) <= np.var(test_image), "Blur should reduce variance"
+
+        # Test with custom parameters
+        custom_blur = preprocessor.apply_gaussian_blur(test_image, kernel_size=(7, 7), sigma=1.5)
+        assert custom_blur.shape == test_image.shape, "Custom blur should preserve shape"
+
+        # Test error handling
+        with pytest.raises(ValueError):
+            preprocessor.apply_gaussian_blur(None)
 
     @pytest.mark.unit
     @pytest.mark.detection
     def test_contrast_enhancement(self):
         """Test image contrast enhancement."""
-        pytest.skip("Waiting for detection module implementation")
+        from detection.preprocessor import ImagePreprocessor, PreprocessorConfig
+
+        # Create low-contrast test image
+        low_contrast = np.random.randint(100, 150, (100, 100), dtype=np.uint8)
+
+        config = PreprocessorConfig(clahe_clip_limit=2.0, clahe_tile_grid_size=(8, 8))
+        preprocessor = ImagePreprocessor(config)
+
+        enhanced = preprocessor.apply_clahe(low_contrast)
+
+        # Verify output properties
+        assert enhanced.shape == low_contrast.shape, "Shape should be preserved"
+        assert enhanced.dtype == np.uint8, "Dtype should be uint8"
+
+        # Enhanced image should have higher standard deviation (more contrast)
+        assert np.std(enhanced) >= np.std(low_contrast), "CLAHE should increase contrast"
+
+        # Test error handling - CLAHE requires single channel
+        with pytest.raises(ValueError):
+            color_image = np.ones((100, 100, 3), dtype=np.uint8)
+            preprocessor.apply_clahe(color_image)
+
+        with pytest.raises(ValueError):
+            preprocessor.apply_clahe(None)
 
 
 class TestCannyEdgeDetection:

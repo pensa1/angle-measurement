@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/pensa1/angle-measurement/blob/main/README.md
+    about: Read the project documentation
+  - name: Architecture Guide
+    url: https://github.com/pensa1/angle-measurement/blob/main/ARCHITECTURE.md
+    about: Learn about the project architecture
+  - name: Team Plan
+    url: https://github.com/pensa1/angle-measurement/blob/main/AGENT_TEAM_PLAN.md
+    about: View the agent team development plan
