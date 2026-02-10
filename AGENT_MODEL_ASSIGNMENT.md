@@ -115,6 +115,29 @@ This document defines optimal model assignments for each agent based on task com
 
 ---
 
+### 6. DevOps & Release Agent → **SONNET** 🟡
+
+**Rationale**:
+- **Standard CI/CD patterns** - GitHub Actions, pytest integration well-established
+- **Moderate complexity** - YAML configuration, workflow automation
+- **Best practices** - established patterns for CI/CD, release management
+- **Low risk** - CI/CD can be tested and iterated quickly
+
+**Task Complexity**: Medium
+**Cost Justification**: Standard DevOps patterns, Sonnet is sufficient
+**Estimated Tasks**: ~15-20 implementations (CI setup, release automation)
+
+**Example Tasks**:
+- Set up GitHub Actions workflow for pytest
+- Configure test coverage reporting (Codecov)
+- Add linting and formatting checks (flake8, black, mypy)
+- Create release automation with semantic versioning
+- Generate changelogs from commit history
+
+**Upgrade to Opus if**: Complex custom CI/CD pipelines or novel deployment strategies needed
+
+---
+
 ## 💰 Cost-Benefit Analysis
 
 ### Model Pricing (Approximate per million tokens)
@@ -134,8 +157,9 @@ This document defines optimal model assignments for each agent based on task com
 - Detection Agent (Opus): ~150K tokens → ~$12
 - UI Agent (Sonnet): ~50K tokens → ~$2
 - Testing Agent (Sonnet): ~60K tokens → ~$2
+- DevOps Agent (Sonnet): ~40K tokens → ~$1.50
 - Documentation Agent (Haiku): ~50K tokens → ~$0.15
-- **Phase 2 Total**: ~$16.15
+- **Phase 2 Total**: ~$17.65
 
 **Phase 3: Interaction (Week 4)**
 - UI Agent (Sonnet): ~80K tokens → ~$2.50
@@ -145,7 +169,13 @@ This document defines optimal model assignments for each agent based on task com
 - Documentation Agent (Haiku): ~60K tokens → ~$0.20
 - **Phase 3 Total**: ~$9.70
 
-**Project Total Estimate**: ~$31
+**Phase 4: Polish & Release (Week 5)**
+- DevOps Agent (Sonnet): ~30K tokens → ~$1
+- Documentation Agent (Haiku): ~40K tokens → ~$0.10
+- All Agents: Bug fixes and refinements → ~$2
+- **Phase 4 Total**: ~$3.10
+
+**Project Total Estimate**: ~$35
 
 ### Cost Savings vs. All-Opus
 - All Opus: ~$62
@@ -168,6 +198,7 @@ This document defines optimal model assignments for each agent based on task com
 | UI/UX | **Sonnet** | Standard patterns, moderate complexity | Medium | Medium |
 | Documentation | **Haiku** | High volume, straightforward task | High | Low |
 | Testing | **Sonnet** | Test design, moderate complexity | High | Medium |
+| DevOps & Release | **Sonnet** | Standard CI/CD patterns | Medium | Medium |
 
 ---
 

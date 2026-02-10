@@ -160,6 +160,45 @@ Build a tool to automatically detect lines in wire bender images, measure angles
 
 ---
 
+### 6. DevOps & Release Agent
+**Role**: CI/CD & Release Management Specialist
+
+**Responsibilities**:
+- Set up GitHub Actions for automated testing
+- Configure continuous integration pipeline
+- Manage release process and versioning
+- Create and manage pull requests
+- Generate changelogs and release notes
+- Set up code quality checks (linting, formatting)
+
+**Key Deliverables**:
+- `.github/workflows/ci.yml` - GitHub Actions CI pipeline
+- `.github/workflows/release.yml` - Release automation
+- Version management and semantic versioning
+- Automated changelog generation
+- PR templates and issue templates
+
+**Initial Tasks** (Phase 2):
+1. Set up GitHub Actions workflow for pytest
+2. Configure automated test execution on push/PR
+3. Add test coverage reporting (Codecov integration)
+4. Set up linting (flake8, black, mypy)
+5. Create PR and issue templates
+
+**Later Tasks** (Phase 4):
+1. Create v1.0 release with proper versioning
+2. Generate changelog from commit history
+3. Create final PR to main branch
+4. Tag release with semantic versioning
+5. Set up automated release notes
+
+**Dependencies**:
+- Works with Testing Agent for CI/CD pipeline
+- Coordinates with Documentation Agent for release notes
+- Supports all agents with automated quality checks
+
+---
+
 ## 📋 Work Distribution by Phase
 
 ### Phase 1: Foundation Refactoring (Week 1)
@@ -222,7 +261,14 @@ Build a tool to automatically detect lines in wire bender images, measure angles
 - Create PARAMETERS.md tuning guide
 - Add detection examples to README.md
 
-**Deliverables**: Working auto-detection, parameter tuning UI, comprehensive tests
+**DevOps Agent**:
+- Set up GitHub Actions CI/CD pipeline
+- Configure automated pytest execution
+- Add test coverage reporting (Codecov)
+- Set up linting and code quality checks
+- Create PR and issue templates
+
+**Deliverables**: Working auto-detection, parameter tuning UI, comprehensive tests, CI/CD pipeline
 
 ---
 
