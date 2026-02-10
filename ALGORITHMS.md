@@ -268,6 +268,177 @@ def angle_between_lines(line1, line2):
 
 ---
 
+## Image Preprocessing Pipeline
+
+### Overview
+
+The preprocessing pipeline transforms raw input images into edge-ready representations. It applies a sequence of transformations designed to enhance edges while reducing noise, preparing the image for Canny and Hough analysis.
+
+### Pipeline Stages
+
+The pipeline executes in this order:
+
+1. **Grayscale Conversion**: Convert BGR or color images to single-channel grayscale
+2. **Gaussian Blur**: Reduce noise and minor details
+3. **CLAHE (Optional)**: Enhance local contrast
+4. **Morphological Operations (Optional)**: Fill small gaps in edges
+
+### Stage 1: Grayscale Conversion
+
+**Purpose**: Convert color information to intensity values.
+
+**Process**:
+```python
+if image is already grayscale:
+    pass (return unchanged)
+else:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # Weighted average: 0.299*R + 0.587*G + 0.114*B
+```
+
+**Why it matters**:
+- Simplifies downstream processing
+- Reduces data from 3 channels to 1
+- Standard format for edge detection
+
+### Stage 2: Gaussian Blur
+
+**Purpose**: Reduce image noise and minor detail without removing important edges.
+
+**Configuration**:
+- Kernel size: typically (5, 5), must be odd integers
+- Sigma: standard deviation (0 lets OpenCV choose automatically)
+
+**Effect on image**:
+```
+Input (noisy):       Blurred (smooth):
+░▓█▓░█░▓█           ███░░░██
+████░░░██           ███░░░██
+```
+
+**When to adjust**:
+- Larger kernel (7×7, 9×9): More blur, slower edges
+- Smaller kernel (3×3): Less blur, retains detail
+- Higher sigma: More blur effect
+
+### Stage 3: CLAHE (Contrast Limited Adaptive Histogram Equalisation)
+
+**Purpose**: Enhance local contrast while avoiding over-amplification of noise.
+
+**Configuration**:
+- Clip limit: typically 2.0-4.0 (higher = more contrast)
+- Tile grid size: typically (8, 8) (more tiles = finer local contrast)
+
+**How it works**:
+```
+1. Divide image into tiles (8×8 grid by default)
+2. For each tile:
+   - Compute local histogram
+   - Clip histogram at clip_limit
+   - Apply histogram equalization
+3. Interpolate between tile boundaries
+```
+
+**Effect**:
+```
+Low contrast input:     Enhanced output:
+░░░░░░░░░░░░░░░░       ░░░▓▓▓░░░░▓▓▓░
+░░░░░░░░░░░░░░░░       ░▓█▓█▓░░▓█▓█▓░
+```
+
+**When to use CLAHE**:
+- Enable (default): Low contrast, uneven lighting
+- Disable: Already high contrast, to avoid over-processing
+
+### Stage 4: Morphological Operations (Optional)
+
+**Purpose**: Fill small gaps in edges, remove noise speckles.
+
+**Supported operations**:
+- `"dilate"`: Expand white regions (fill gaps)
+- `"erode"`: Shrink white regions (remove noise)
+- `"open"`: Erode then dilate (remove small noise)
+- `"close"`: Dilate then erode (fill small holes) - **default**
+
+**Visual examples**:
+```
+Original (with gaps):
+  ●──●  ●──●  ●──●
+
+After close (kernel=3×3, iterations=1):
+  ●──●──●──●──●──●  (gaps filled)
+
+After open (kernel=3×3, iterations=1):
+  ●──●  ●──●  ●──●  (small noise removed)
+```
+
+**Configuration**:
+- Kernel size: typically (3, 3), (5, 5), or (7, 7)
+- Iterations: number of times to apply operation (1-3 typical)
+
+### Pipeline Tuning
+
+**Low contrast images**:
+```python
+config = PreprocessorConfig(
+    use_clahe=True,           # enable contrast enhancement
+    clahe_clip_limit=3.0,     # more aggressive
+    clahe_tile_grid_size=(8, 8),
+    blur_kernel_size=(5, 5),  # standard blur
+)
+```
+
+**Noisy images**:
+```python
+config = PreprocessorConfig(
+    use_clahe=True,
+    blur_kernel_size=(7, 7),  # more blur for noise reduction
+    use_morphology=True,
+    morph_operation="close",  # fill gaps from noise
+)
+```
+
+**High contrast images** (well-lit):
+```python
+config = PreprocessorConfig(
+    use_clahe=False,          # skip enhancement
+    blur_kernel_size=(5, 5),
+    use_morphology=False,     # skip morphology
+)
+```
+
+### Image Analysis Helpers
+
+The preprocessor includes utilities for adaptive tuning:
+
+**analyze_image_stats(image)**: Computes statistics
+```python
+stats = {
+    'mean': average intensity,
+    'std': standard deviation,
+    'median': median intensity,
+    'min': minimum value,
+    'max': maximum value,
+    'contrast_ratio': (max - min) / 255
+}
+
+# Low contrast: contrast_ratio < 0.3
+# Normal: 0.3-0.7
+# High contrast: > 0.7
+```
+
+**estimate_noise_level(image)**: Estimates noise using Laplacian
+```python
+noise_sigma = estimated_noise_level(image)
+
+# Typical ranges:
+# 0-5: clean image
+# 5-15: moderate noise
+# >15: heavy noise
+```
+
+---
+
 ## Canny Edge Detection Algorithm
 
 ### Overview
@@ -835,6 +1006,258 @@ Output:
 - Unrelated lines are incorrectly combined
 - Need fine bend/joint detail
 - Wires are very close together
+
+---
+
+## Line Post-Processing Pipeline
+
+### Overview
+
+After detecting raw lines from the Hough Transform, a post-processing pipeline cleans and merges fragments into meaningful line segments suitable for angle measurement.
+
+### Complete Pipeline
+
+The post-processing executes in this order:
+
+1. **Filter short lines**: Remove lines below minimum length
+2. **Remove duplicates**: Discard lines with nearly identical endpoints
+3. **Merge collinear lines**: Combine nearby parallel segments
+
+### Step 1: Filter Short Lines
+
+**Purpose**: Remove insignificant or noise-generated short segments.
+
+**Process**:
+```python
+min_length = 30  # pixels (configurable)
+
+for line in detected_lines:
+    if line.length >= min_length:
+        keep(line)
+```
+
+**Effect**:
+```
+Input:
+  ●──●  ●──●  ●──●  ●──────●  ●─●  ●──●
+  15px  20px  25px   80px     10px  18px
+
+With min_length=30:
+  ●──────●  (only 80px line survives)
+```
+
+**When to adjust**:
+- Lower (10-20px): Keep fine details, incomplete wires
+- Keep default (30px): Good balance
+- Raise (50-100px): Only substantial segments
+
+### Step 2: Remove Duplicates
+
+**Purpose**: Eliminate lines detected multiple times (common with Hough overlaps).
+
+**Process**:
+```python
+duplicate_distance = 10  # pixels
+
+for each candidate_line:
+    for each existing_line:
+        distance_fwd = max(
+            dist(candidate.p1, existing.p1),
+            dist(candidate.p2, existing.p2)
+        )
+        distance_rev = max(
+            dist(candidate.p1, existing.p2),
+            dist(candidate.p2, existing.p1)
+        )
+
+        if min(distance_fwd, distance_rev) <= duplicate_distance:
+            skip(candidate_line)  # it's a duplicate
+```
+
+**Visual**:
+```
+Input (with duplicates):
+  Line 1: (50, 100) → (200, 100)
+  Line 2: (51, 101) → (199, 99)   ← near duplicate of Line 1
+  Line 3: (100, 50) → (100, 200)
+  Line 4: (101, 49) → (100, 201)  ← near duplicate of Line 3
+
+After deduplication:
+  Line 1: (50, 100) → (200, 100)  (kept)
+  Line 3: (100, 50) → (100, 200)  (kept)
+```
+
+**Configuration**:
+- Threshold (5-20px): Tolerance for endpoint matching
+- Check both orderings: Handle reversed endpoints
+
+### Step 3: Merge Collinear Lines
+
+**Purpose**: Combine nearby parallel line segments from the same wire/edge.
+
+**Algorithm**:
+```python
+1. Group lines by orientation (within angle_tolerance degrees)
+2. Within each group:
+   a. Find pairs within perpendicular distance_tolerance
+   b. Check projection overlap
+   c. If criteria met, merge into single line
+3. Repeat until no more merges occur
+```
+
+**Grouping by orientation**:
+```python
+angle_tolerance = 10.0  # degrees
+
+# Group line 1 (45°) and line 2 (48°)
+if abs(45 - 48) <= 10:
+    group("orientation_45", [line1, line2])
+
+# Don't group line 1 (45°) and line 3 (92°)
+if abs(45 - 92) > 10:
+    skip_merge()
+```
+
+**Perpendicular distance check**:
+```python
+distance_tolerance = 15.0  # pixels
+
+# Compute average perpendicular distance
+d = (distance_point_to_line(line1.midpoint, line2) +
+     distance_point_to_line(line2.midpoint, line1)) / 2
+
+if d <= distance_tolerance:
+    merge_candidates = True
+```
+
+**Projection overlap check**:
+```python
+overlap_ratio = 0.0  # 0 = merge if collinear, 1 = require full overlap
+
+# Project both segments onto the longer segment's direction
+overlap = compute_1d_overlap(line1, line2)
+
+if overlap >= overlap_ratio or d < distance_tolerance * 0.5:
+    perform_merge()
+```
+
+**Merge computation**:
+```python
+# Find the two outermost endpoints
+all_points = [line1.p1, line1.p2, line2.p1, line2.p2]
+
+# Project onto the principal direction
+direction = normalize(line1.direction)
+projections = [dot(p, direction) for p in all_points]
+
+# Outermost in projected space
+min_proj_point = all_points[argmin(projections)]
+max_proj_point = all_points[argmax(projections)]
+
+merged_line = Line(min_proj_point, max_proj_point)
+```
+
+**Visual**:
+```
+Input (2 groups of collinear segments):
+Group 1 (45° orientation):
+  ●──●  ●──●  ●──●   (3 small segments)
+
+Group 2 (90° orientation):
+  │ │ │ │   (3 vertical segments)
+  │ │ │ │
+
+After merging within each group:
+  ●─────●   (Group 1 merged)
+
+  │ │ │ │   (Group 2 merged)
+  ───────
+```
+
+### Post-Processing Configuration
+
+**Conservative** (preserve fine details):
+```python
+config = PostprocessorConfig(
+    min_line_length=20.0,        # keep short segments
+    angle_tolerance=5.0,         # strict angle grouping
+    distance_tolerance=10.0,     # strict distance
+    duplicate_distance=5.0,      # strict dedup
+    overlap_ratio=0.3,           # require overlap
+)
+```
+
+**Balanced** (default):
+```python
+config = PostprocessorConfig(
+    min_line_length=30.0,
+    angle_tolerance=10.0,
+    distance_tolerance=15.0,
+    duplicate_distance=10.0,
+    overlap_ratio=0.0,          # merge if collinear
+)
+```
+
+**Aggressive** (maximum cleanup):
+```python
+config = PostprocessorConfig(
+    min_line_length=50.0,
+    angle_tolerance=15.0,
+    distance_tolerance=25.0,
+    duplicate_distance=15.0,
+    overlap_ratio=0.0,
+)
+```
+
+### Angle Extraction
+
+**Purpose**: Compute pairwise angles between lines for measurement.
+
+**Process**:
+```python
+# For each pair of lines that aren't parallel:
+for l1, l2 in combinations(lines, 2):
+    # Compute direction vectors
+    dir1 = l1.direction()
+    dir2 = l2.direction()
+
+    # Angle using dot product
+    cos_angle = dot(dir1, dir2) / (norm(dir1) * norm(dir2))
+    angle = arccos(clamp(cos_angle, -1, 1))
+
+    # Convert to degrees (0-180)
+    angle_deg = degrees(angle)
+
+    # Find intersection vertex
+    vertex = find_line_intersection(l1, l2)
+
+    # Create measurement
+    measurements.append(Measurement(
+        angle_degrees=angle_deg,
+        vertex=vertex,
+        line1=l1,
+        line2=l2,
+    ))
+```
+
+**Parallel line handling**:
+```python
+# If lines are nearly parallel (angle < 1°):
+if angle < 1.0:
+    skip(pair)  # Skip near-parallel pairs
+
+# If infinite lines don't intersect (parallel in Euclidean space):
+if vertex is None:
+    # Use midpoint between lines instead
+    vertex = ((l1.midpoint + l2.midpoint) / 2)
+```
+
+**Best angle selection**:
+```python
+# Heuristic: angle formed by two longest lines
+sorted_lines = sorted(lines, key=lambda l: l.length, reverse=True)
+best_angle = angle_between(sorted_lines[0], sorted_lines[1])
+```
 
 ---
 

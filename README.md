@@ -40,6 +40,143 @@ An interactive Python tool for measuring angles in images, video streams, and li
    pip install -r requirements.txt
    ```
 
+## Quick Start
+
+### Basic Line Detection
+
+Automatically detect and measure angles in an image:
+
+```python
+import cv2
+from detection.line_detector import LineDetector
+from detection.postprocessor import LinePostprocessor
+
+# Load image
+image = cv2.imread("path/to/image.jpg")
+
+# Detect lines
+detector = LineDetector()
+detection_result = detector.detect(image)
+
+print(f"Found {len(detection_result.lines)} lines")
+print(f"Detection took {detection_result.detection_time_ms:.2f}ms")
+
+# Post-process (merge, filter)
+postprocessor = LinePostprocessor()
+processed_result = postprocessor.process_result(detection_result)
+
+print(f"After post-processing: {len(processed_result.lines)} lines")
+
+# Get angle measurements
+measurements = postprocessor.find_angles(processed_result.lines)
+
+for m in measurements:
+    print(f"Angle: {m.angle_degrees:.1f}° at vertex {m.vertex}")
+```
+
+### Automatic Parameter Tuning
+
+Let the detector suggest optimal Canny thresholds for your image:
+
+```python
+from detection.line_detector import LineDetector
+
+detector = LineDetector()
+
+# Suggest thresholds based on image content
+low, high = detector.suggest_canny_thresholds(image)
+print(f"Suggested: low={low}, high={high}")
+
+# Use auto-detected thresholds
+result = detector.auto_detect(image)
+```
+
+### Parameter Tuning
+
+Customize detection parameters for your use case:
+
+```python
+from detection.line_detector import LineDetector, LineDetectorConfig
+from detection.preprocessor import ImagePreprocessor, PreprocessorConfig
+
+# Configure preprocessing
+prep_config = PreprocessorConfig(
+    use_clahe=True,              # enhance contrast
+    clahe_clip_limit=2.5,        # more aggressive
+    blur_kernel_size=(5, 5),
+)
+
+# Configure detection
+detect_config = LineDetectorConfig(
+    canny_low_threshold=40,      # lower for more edges
+    canny_high_threshold=120,
+    hough_threshold=40,
+    min_line_length=50,
+    max_line_gap=15,
+)
+
+# Create detector with custom config
+detector = LineDetector(
+    config=detect_config,
+    preprocessor_config=prep_config
+)
+
+result = detector.detect(image)
+```
+
+### Accessing Detection Results
+
+```python
+from detection.line_detector import LineDetector
+
+detector = LineDetector()
+result = detector.detect(image)
+
+# Access detected lines
+for i, line in enumerate(result.lines):
+    print(f"Line {i}:")
+    print(f"  From: ({line.x1:.1f}, {line.y1:.1f})")
+    print(f"  To:   ({line.x2:.1f}, {line.y2:.1f})")
+    print(f"  Length: {line.length:.1f} pixels")
+    print(f"  Angle: {line.angle():.1f}°")
+
+# Access metadata
+print(f"Image size: {result.source_shape}")
+print(f"Detection time: {result.detection_time_ms:.2f}ms")
+print(f"Parameters used: {result.parameters}")
+```
+
+### Visualizing Detection
+
+```python
+import cv2
+from detection.line_detector import LineDetector
+
+detector = LineDetector()
+result = detector.detect(image)
+
+# Draw detected lines on the image
+output = image.copy()
+for line in result.lines:
+    pt1 = (int(line.x1), int(line.y1))
+    pt2 = (int(line.x2), int(line.y2))
+    cv2.line(output, pt1, pt2, (0, 255, 0), 2)
+
+# Draw angle vertices
+from detection.postprocessor import LinePostprocessor
+postprocessor = LinePostprocessor()
+measurements = postprocessor.find_angles(result.lines)
+
+for m in measurements:
+    cv2.circle(output, (int(m.vertex[0]), int(m.vertex[1])), 5, (0, 0, 255), -1)
+    cv2.putText(output, f"{m.angle_degrees:.1f}°",
+                (int(m.vertex[0]), int(m.vertex[1]) - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+cv2.imshow("Detected Lines and Angles", output)
+cv2.waitKey(0)
+```
+
 ## Usage
 
 ### Running the Application

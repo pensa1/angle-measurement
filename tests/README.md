@@ -169,9 +169,19 @@ def test_detection_with_fixture(sample_image):
 - **Coverage areas**: Angle calculation, distance, line intersection, vector math, edge cases
 
 ### test_detection.py
-- **Status**: Skeleton tests created, waiting for `detection/` module implementation
-- **Test count**: 25+ test stubs
-- **Coverage areas**: Preprocessing, Canny edge detection, Hough transform, line merging
+- **Status**: ✅ FULLY ACTIVATED AND PASSING (Phase 2 Complete)
+- **Test count**: 22 tests (all passing)
+- **Coverage**: 81% of detection module
+- **Coverage areas**:
+  - Image preprocessing (grayscale, blur, CLAHE) - 3 tests
+  - Canny edge detection - 3 tests
+  - Hough line detection - 4 tests
+  - Line merging and filtering - 4 tests
+  - Parameter tuning and adaptation - 2 tests
+  - Integration and performance - 3 tests
+  - Edge cases (no lines, noise, poor lighting) - 3 tests
+- **Performance**: Average 7.3ms per frame (target: <500ms) ✅
+- **Integration**: Full pipeline tested with sample.jpg successfully
 
 ### test_workflows.py
 - **Status**: Skeleton tests created, waiting for full pipeline integration
@@ -201,7 +211,125 @@ This will:
 - Fail if coverage drops below 80%
 - Show short traceback for failures
 
+## Running Detection Tests
+
+The detection tests validate the complete line detection pipeline. All 22 tests are now active and passing.
+
+### Quick Start
+
+```bash
+# Run all detection tests
+python -m pytest tests/test_detection.py -v
+
+# Run with coverage
+python -m pytest tests/test_detection.py --cov=detection --cov-report=term-missing
+
+# Run specific test class
+python -m pytest tests/test_detection.py::TestCannyEdgeDetection -v
+
+# Run performance tests
+python -m pytest tests/test_detection.py::TestDetectionQuality::test_detection_performance -v -s
+```
+
+### Test Categories
+
+#### Preprocessing Tests (3 tests)
+- `test_grayscale_conversion` - RGB to grayscale conversion
+- `test_gaussian_blur` - Noise reduction via Gaussian blur
+- `test_contrast_enhancement` - CLAHE contrast enhancement
+
+#### Canny Edge Detection Tests (3 tests)
+- `test_canny_basic` - Basic Canny edge detection
+- `test_canny_threshold_adaptation` - Adaptive threshold selection
+- `test_canny_on_synthetic_images` - Edge detection on fixtures
+
+#### Hough Line Detection Tests (4 tests)
+- `test_hough_line_detection_basic` - Basic Hough transform
+- `test_hough_probabilistic` - Probabilistic Hough line detection
+- `test_hough_on_90_degree_lines` - Detection on perpendicular lines
+- `test_hough_on_parallel_lines` - Detection on parallel lines
+
+#### Line Merging Tests (4 tests)
+- `test_merge_collinear_segments` - Merging collinear segments
+- `test_filter_short_lines` - Filtering by minimum length
+- `test_remove_duplicate_lines` - Deduplication
+- `test_merge_nearby_parallel_lines` - Merging parallel lines
+
+#### Parameter Tuning Tests (2 tests)
+- `test_adaptive_threshold_selection` - Auto-tuning Canny thresholds
+- `test_parameter_optimization` - Parameter updates and optimization
+
+#### Integration Tests (3 tests)
+- `test_detection_accuracy_known_angles` - Accuracy on synthetic images
+- `test_false_positive_rate` - False positive validation
+- `test_detection_performance` - Speed benchmarking (<500ms target)
+
+#### Edge Case Tests (3 tests)
+- `test_no_lines_detected` - Handling blank images
+- `test_very_noisy_image` - Robustness to noise
+- `test_poor_lighting` - Low contrast handling
+
+### Performance Metrics
+
+Based on test results:
+- **Average detection time**: 7.3ms per frame
+- **Maximum detection time**: 27.4ms per frame
+- **Coverage**: 81% of detection module
+- **Target performance**: <500ms (achieved: 1.5% of target)
+
+### Example: Full Pipeline Integration
+
+```python
+import cv2
+from detection.line_detector import LineDetector
+from detection.postprocessor import LinePostprocessor
+
+# Load image
+img = cv2.imread('img/sample.jpg')
+
+# Detect lines
+detector = LineDetector()
+result = detector.detect(img)
+print(f'Detected {len(result.lines)} lines in {result.detection_time_ms:.1f}ms')
+
+# Post-process
+pp = LinePostprocessor()
+processed = pp.process(result.lines)
+print(f'After filtering: {len(processed)} lines')
+
+# Find angles
+angles = pp.find_angles(processed)
+best_angle = pp.find_best_angle(processed)
+print(f'Best angle: {best_angle.angle_degrees:.1f}°')
+```
+
 ## Troubleshooting
+
+### Detection Tests
+
+#### Test fixtures not found
+Make sure test fixtures exist:
+```bash
+ls tests/fixtures/*.png
+```
+
+If missing, regenerate:
+```bash
+cd tests/fixtures
+python create_test_images.py
+```
+
+#### Performance test fails
+The performance test expects detection to complete in <500ms on average and <1000ms maximum. If failing:
+- Check if running on slow hardware
+- Verify no background processes consuming CPU
+- Test images are small (400x400), should be fast
+
+#### Coverage seems low
+Detection coverage of 81% is good for initial implementation. Uncovered lines are:
+- Error handling paths (difficult to trigger in normal operation)
+- Optional morphology operations (disabled by default)
+- Advanced parameter tuning helpers
 
 ### Import Errors
 

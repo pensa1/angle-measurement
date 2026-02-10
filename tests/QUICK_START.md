@@ -37,11 +37,17 @@ python -m pytest tests/test_geometry.py -v
 
 ### For Detection Agent
 ```bash
-# Run detection tests only
+# Run detection tests only (all 22 tests now passing!)
 python -m pytest tests/test_detection.py -v
 
-# Use synthetic fixtures in tests/fixtures/*.png
-# Test with known angles for validation
+# Run with coverage
+python -m pytest tests/test_detection.py --cov=detection
+
+# Run performance tests
+python -m pytest tests/test_detection.py::TestDetectionQuality::test_detection_performance -v -s
+
+# Test on specific fixtures
+python -m pytest tests/test_detection.py -m fixture -v
 ```
 
 ### Viewing Test Images
@@ -57,7 +63,11 @@ ls tests/fixtures/*.png
 - ✅ Infrastructure ready
 - ✅ 71 tests defined
 - ✅ 16 synthetic images generated
-- ⏳ Tests waiting for implementation (all currently skipped)
+- ✅ **Detection tests: 22/22 passing (100%)** - Phase 2 complete!
+- ✅ Detection module: 81% coverage (exceeds 80% target)
+- ✅ Performance: 7.3ms average (99% faster than 500ms target)
+- ⏳ Geometry tests: Waiting for implementation
+- ⏳ Workflow tests: Waiting for implementation
 
 ### Test-Driven Development Workflow
 1. Pick a test function

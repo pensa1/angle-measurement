@@ -1,5 +1,52 @@
 # Detection Parameter Tuning Guide
 
+## Complete Parameter Overview
+
+The detection pipeline has three stages, each with adjustable parameters:
+
+### Stage 1: Preprocessing Parameters
+
+| Parameter | Default | Range | Purpose |
+|-----------|---------|-------|---------|
+| **blur_kernel_size** | (5, 5) | (3,3)-(9,9) | Gaussian blur kernel (must be odd) |
+| **blur_sigma** | 0 | 0-2.0 | Gaussian blur sigma (0=auto) |
+| **use_clahe** | True | - | Enable contrast enhancement |
+| **clahe_clip_limit** | 2.0 | 1.0-4.0 | CLAHE contrast amplification |
+| **clahe_tile_grid_size** | (8, 8) | (4,4)-(16,16) | CLAHE tile grid size |
+| **use_morphology** | False | - | Enable morphological operations |
+| **morph_operation** | "close" | dilate/erode/open/close | Morphology type |
+| **morph_kernel_size** | (3, 3) | (3,3)-(7,7) | Morphology kernel size |
+| **morph_iterations** | 1 | 1-3 | Morphology repetitions |
+
+### Stage 2: Edge Detection (Canny) Parameters
+
+| Parameter | Default | Range | Purpose |
+|-----------|---------|-------|---------|
+| **canny_low_threshold** | 50 | 10-100 | Threshold for weak edges |
+| **canny_high_threshold** | 150 | 30-300 | Threshold for strong edges |
+| **canny_aperture_size** | 3 | 3, 5, 7 | Sobel kernel aperture size |
+| **canny_l2_gradient** | False | - | Use L2 norm instead of L1 |
+
+### Stage 3: Line Detection (Hough) Parameters
+
+| Parameter | Default | Range | Purpose |
+|-----------|---------|-------|---------|
+| **hough_rho** | 1.0 | 0.5-2.0 | Accumulator distance resolution (pixels) |
+| **hough_theta** | π/180 | π/180-π/36 | Accumulator angle resolution (radians) |
+| **hough_threshold** | 50 | 10-150 | Minimum votes for line detection |
+| **min_line_length** | 50 | 10-200 | Minimum pixels for valid line |
+| **max_line_gap** | 10 | 5-50 | Maximum gap to connect line segments |
+
+### Stage 4: Post-Processing Parameters
+
+| Parameter | Default | Range | Purpose |
+|-----------|---------|-------|---------|
+| **min_line_length** | 30 | 10-100 | Minimum line length after merging |
+| **angle_tolerance** | 10 | 1-20 | Angular difference for grouping (degrees) |
+| **distance_tolerance** | 15 | 5-30 | Perpendicular distance for merging (pixels) |
+| **overlap_ratio** | 0.0 | 0.0-1.0 | Minimum overlap for merging (0=collinear) |
+| **duplicate_distance** | 10 | 5-20 | Endpoint distance for deduplication (pixels) |
+
 ## Quick Start
 
 For most wire bender images, start with these **default parameters**:
@@ -27,7 +74,164 @@ DEFAULT_PARAMS = {
 
 ## Parameter Explanations
 
-### Canny Edge Detection Parameters
+### Preprocessing Parameters
+
+#### Gaussian Blur
+
+**blur_kernel_size** (Default: (5, 5))
+
+- Must be odd integers (3, 5, 7, 9, 11, ...)
+- Larger kernel = more blur = slower edges but cleaner
+- Smaller kernel = less blur = preserves detail
+
+**Recommendations**:
+- Clean images: (3, 3) or (5, 5)
+- Noisy images: (7, 7) or (9, 9)
+- Very noisy: (9, 9) or (11, 11)
+
+**blur_sigma** (Default: 0)
+
+- Controls blur intensity
+- 0 = let OpenCV calculate automatically
+- Higher values = stronger blur effect
+- Rarely needs adjustment with default kernel size
+
+#### CLAHE Parameters
+
+**use_clahe** (Default: True)
+
+Enable/disable contrast enhancement. Recommended to keep enabled for:
+- Low contrast images
+- Uneven lighting (shadows)
+- Underexposed photos
+
+Disable if:
+- Already high contrast
+- Noisy background (CLAHE amplifies noise)
+- Processing speed is critical
+
+**clahe_clip_limit** (Default: 2.0)
+
+Controls contrast amplification. Higher = more contrast.
+
+```
+Low contrast image:
+  Before: ░░░░░░░░░░░░░░░░  (flat)
+  Low (1.0): ░░░▓▓▓░░░░      (slight enhancement)
+  Mid (2.0): ░░▓▓▓░░░░░░     (balanced)
+  High (4.0): ░▓█▓░░░░░░░    (aggressive)
+```
+
+**When to adjust**:
+- Lower (1.0-1.5): Avoid over-enhancement, subtle changes
+- Keep default (2.0): Good balance
+- Raise (3.0-4.0): Very low contrast input
+
+**clahe_tile_grid_size** (Default: (8, 8))
+
+Number of tiles for local contrast enhancement.
+
+```
+More tiles (16×16): Finer local contrast, higher computation
+Default (8×8): Balanced
+Fewer tiles (4×4): Coarser contrast, faster
+```
+
+**When to adjust**:
+- Smaller grids (4×4): Fast processing, coarse contrast
+- Keep default (8×8): Good balance
+- Larger grids (16×16): Very fine local contrast detail
+
+#### Morphological Operations
+
+**use_morphology** (Default: False)
+
+Enable/disable morphological operations (dilation/erosion).
+
+Enable if:
+- Edges have small gaps (shadows, lighting artifacts)
+- Need to fill holes in edges
+- Merging post-processor leaves gaps
+
+Disable if:
+- Already good edge connectivity
+- Want to preserve all fine details
+
+**morph_operation** (Default: "close")
+
+Available operations:
+- **"dilate"**: Expand white regions (thicken edges)
+- **"erode"**: Shrink white regions (thin edges, remove noise)
+- **"open"**: Erode then dilate (remove small noise)
+- **"close"**: Dilate then erode (fill small holes) ← usually best
+
+**morph_kernel_size** (Default: (3, 3))
+
+Size of the morphology kernel.
+
+```
+Smaller (3×3): Subtle effect, preserves detail
+Default (3×3): Typical choice
+Larger (5×5, 7×7): Stronger effect, removes more
+```
+
+**morph_iterations** (Default: 1)
+
+Number of times to apply the operation.
+
+```
+1 iteration: Mild effect
+2-3 iterations: Strong effect
+>3: Risk of over-processing
+```
+
+#### Preprocessing Presets
+
+**For clean, high-contrast images**:
+```python
+config = PreprocessorConfig(
+    use_clahe=False,              # skip enhancement
+    blur_kernel_size=(5, 5),
+    use_morphology=False,
+)
+```
+
+**For low-contrast images** (shadows, underexposed):
+```python
+config = PreprocessorConfig(
+    use_clahe=True,
+    clahe_clip_limit=3.0,         # more aggressive
+    clahe_tile_grid_size=(8, 8),
+    blur_kernel_size=(5, 5),
+    use_morphology=False,
+)
+```
+
+**For noisy background** (texture):
+```python
+config = PreprocessorConfig(
+    use_clahe=True,
+    blur_kernel_size=(7, 7),      # more blur
+    use_morphology=True,
+    morph_operation="open",       # remove noise
+    morph_iterations=1,
+)
+```
+
+**For fragmented edges** (broken lines):
+```python
+config = PreprocessorConfig(
+    use_clahe=True,
+    use_morphology=True,
+    morph_operation="close",      # fill gaps
+    morph_kernel_size=(5, 5),
+    morph_iterations=1,
+)
+```
+
+---
+
+## Canny Edge Detection Parameters
 
 #### Low Threshold (Default: 50)
 
@@ -225,6 +429,181 @@ Gap = 30 pixels (lenient):
 - **Lower (5-10)**: Wires are well-lit, clearly separated
 - **Keep default (10)**: Good for typical images
 - **Raise (15-25)**: Shadows create gaps in edges
+
+---
+
+## Post-Processing Parameters
+
+### Line Filtering and Merging
+
+#### min_line_length (Default: 30)
+
+Minimum line length after post-processing (filters short noise).
+
+```
+Low (10-20px): Keep fine details, all wire segments
+Default (30px): Good balance, removes noise
+High (50-100px): Only substantial lines
+```
+
+**When to adjust**:
+- Lower: Detect thin wires, small wire segments
+- Higher: Cleaner output, remove short noise
+
+#### angle_tolerance (Default: 10.0 degrees)
+
+Maximum angular difference for lines to be grouped as same orientation.
+
+```
+Tight (3-5°): Strict grouping, preserve fine direction changes
+Default (10°): Good for typical wires
+Loose (15-20°): Merge more aggressively, ignore small bends
+```
+
+**Effect**:
+```
+Tight (5°):
+  ●───●  ●───●  ●───●  (lines grouped: 45°, 50°, 55° separately)
+
+Default (10°):
+  ●───────●  ●───●  (lines grouped: 45°/50°/55° together, 92° separate)
+
+Loose (20°):
+  ●──────────────●  (too aggressive, unrelated lines merge)
+```
+
+**When to adjust**:
+- Lower: Preserve fine wire bends, complex geometry
+- Higher: Merge fragmented wires, clean output
+
+#### distance_tolerance (Default: 15.0 pixels)
+
+Maximum perpendicular distance between lines for merging.
+
+```
+Tight (5-10px): Only merge if almost touching
+Default (15px): Good for typical wire spacing
+Loose (20-30px): Merge from further apart
+```
+
+**Visual**:
+```
+Tight (5px):
+  ●──●  ●──●     (gap=8px, distance_tol=5 → NO merge)
+       gap
+
+Default (15px):
+  ●──●  ●──●     (gap=8px, distance_tol=15 → MERGE)
+       gap
+
+Loose (25px):
+  ●──●        ●──●  (gap=20px, distance_tol=25 → MERGE)
+       gap
+```
+
+**When to adjust**:
+- Lower: Wires are well-separated, avoid false merges
+- Higher: Wires have gaps from shadows, need to merge
+
+#### overlap_ratio (Default: 0.0)
+
+Minimum overlap along shared direction for two segments to merge.
+
+```
+0.0: Merge if collinear (any overlap)
+0.3: Require 30% overlap
+0.5: Require 50% overlap
+1.0: Require complete containment
+```
+
+**Visual**:
+```
+Two lines:
+  Line 1: ●────────●    (20px long)
+  Line 2:      ●────●   (15px long, starts 40% along Line 1)
+
+Overlap ratio = 60% (12px / 20px min)
+
+overlap_ratio=0.0: MERGE (collinear)
+overlap_ratio=0.3: MERGE (60% > 30%)
+overlap_ratio=0.5: MERGE (60% > 50%)
+overlap_ratio=0.7: NO MERGE (60% < 70%)
+```
+
+**Recommendations**:
+- Keep 0.0 (default): Most robust for wire detection
+- Use 0.3+ only if too many lines merge
+
+#### duplicate_distance (Default: 10.0 pixels)
+
+Maximum endpoint distance for lines to be considered duplicates.
+
+```
+Tight (5px): Very strict, only exact duplicates
+Default (10px): Typical Hough overlap tolerance
+Loose (15-20px): Remove more duplicates
+```
+
+**When to adjust**:
+- Lower: If Hough creates slightly offset duplicates
+- Higher: Aggressive deduplication
+
+### Post-Processing Presets
+
+**Conservative** (preserve details):
+```python
+config = PostprocessorConfig(
+    min_line_length=20.0,
+    angle_tolerance=5.0,         # strict grouping
+    distance_tolerance=10.0,     # tight merging
+    overlap_ratio=0.3,           # require overlap
+    duplicate_distance=8.0,
+)
+```
+
+**Balanced** (default):
+```python
+config = PostprocessorConfig(
+    min_line_length=30.0,
+    angle_tolerance=10.0,
+    distance_tolerance=15.0,
+    overlap_ratio=0.0,           # merge if collinear
+    duplicate_distance=10.0,
+)
+```
+
+**Aggressive** (cleanup):
+```python
+config = PostprocessorConfig(
+    min_line_length=50.0,
+    angle_tolerance=15.0,
+    distance_tolerance=25.0,
+    overlap_ratio=0.0,
+    duplicate_distance=15.0,
+)
+```
+
+**For complex geometry** (many wire bends):
+```python
+config = PostprocessorConfig(
+    min_line_length=20.0,
+    angle_tolerance=3.0,         # very strict, preserve angles
+    distance_tolerance=12.0,
+    overlap_ratio=0.2,
+    duplicate_distance=8.0,
+)
+```
+
+**For simple geometry** (few straight sections):
+```python
+config = PostprocessorConfig(
+    min_line_length=40.0,
+    angle_tolerance=15.0,        # aggressive grouping
+    distance_tolerance=20.0,
+    overlap_ratio=0.0,
+    duplicate_distance=12.0,
+)
+```
 
 ---
 
