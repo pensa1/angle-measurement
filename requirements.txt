@@ -1,2 +1,6 @@
 opencv-python>=4.6.0
 imutils
+numpy>=1.21.0
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
